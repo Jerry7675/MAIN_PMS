@@ -1,55 +1,68 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import PendingVerificationPage from './pages/PendingVerificationPage';
 import DashboardPage from './pages/DashboardPage';
 import LoadingSpinner from './components/ui/LoadingSpinner';
+import AdminPanel from './components/dashboard/AdminPanel'; // Correct import
 
-// Protected route component
 function ProtectedRoute({ children, allowedRoles }) {
-    const { user, loading } = useAuth();
-    
-    if (loading) {
-        return <LoadingSpinner />;
-    }
-    
-    if (!user) {
-        return <Navigate to="/login" replace />;
-    }
-    
-    if (allowedRoles && !allowedRoles.includes(user.role)) {
-        return <Navigate to="/unauthorized" replace />;
-    }
-    
-    return children;
+  const { user, loading } = useAuth();
+  const location = useLocation();
+  
+  if (loading) {
+    return <LoadingSpinner />;
+  }
+  
+  if (!user) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+  
+  if (allowedRoles && !allowedRoles.includes(user.role)) {
+    return <Navigate to="/unauthorized" replace />;
+  }
+  
+  if (user.status !== 'verified') {
+    return <Navigate to="/pending-verification" replace />;
+  }
+  
+  return children;
 }
 
-
-
-// Main App component
 function App() {
-    return (
-        <AuthProvider>
-            <Router>
-                <Routes>
-                    <Route path="/login" element={<LoginPage />} />
-                    <Route path="/register" element={<RegisterPage />} />
-                    <Route 
-                        path="/dashboard" 
-                        element={
-                            <ProtectedRoute allowedRoles={['patient', 'doctor', 'management', 'admin']}>
-                                <DashboardPage />
-                            </ProtectedRoute>
-                        } 
-                    />
-                    <Route 
-                        path="/" 
-                        element={<Navigate to="/dashboard" replace />} 
-                    />
-                </Routes>
-            </Router>
-        </AuthProvider>
-    );
+  return (
+    <AuthProvider>
+      <Router>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/pending-verification" element={<PendingVerificationPage />} />
+          
+          <Route 
+            path="/dashboard" 
+            element={
+              <ProtectedRoute allowedRoles={['patient', 'doctor', 'management']}>
+                <DashboardPage />
+              </ProtectedRoute>
+            } 
+          />
+          
+          <Route 
+            path="/admin/dashboard" 
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminPanel /> {/* Using your AdminPanel component */}
+              </ProtectedRoute>
+            } 
+          />
+          
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </Router>
+    </AuthProvider>
+  );
 }
 
 export default App;

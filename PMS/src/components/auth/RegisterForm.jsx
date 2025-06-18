@@ -14,23 +14,35 @@ export default function RegisterForm() {
     const navigate = useNavigate();
 
     const handleSubmit = async (e) => {
-        e.preventDefault();
-        setError('');
+    e.preventDefault();
+    setError('');
+    
+    if (password !== confirmPassword) {
+      return setError('Passwords do not match');
+    }
+    
+    // Prevent admin registration through UI
+    if (role === 'admin') {
+      return setError('Admin accounts cannot be created through registration');
+    }
+    
+    setLoading(true);
         
-        if (password !== confirmPassword) {
-            return setError('Passwords do not match');
-        }
-        
-        setLoading(true);
-        
-        try {
-            await signUp(name, email, password, role);
-            navigate('/dashboard');
-        } catch (err) {
-            setError('Registration failed: ' + err.message);
-        } finally {
-            setLoading(false);
-        }
+    try {
+      await signUp(name, email, password, role);
+      
+      // Redirect based on role
+      if (role === 'admin') {
+        navigate('/admin/dashboard');
+      } else {
+        navigate('/pending-verification');
+      }
+    } catch (err) {
+      setError(err.message || 'Registration failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  
     };
 
     return (
