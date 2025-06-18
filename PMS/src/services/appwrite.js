@@ -1,5 +1,6 @@
 import { Client, Account, Databases, Permission as AppwritePermission, Role, ID } from 'appwrite';
 
+// Initialize Appwrite client
 const client = new Client()
   .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT)
   .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID);
@@ -21,21 +22,9 @@ export const initDatabase = async () => {
   if (isInitialized) return true;
 
   try {
-    // 1. Check if database exists
-    try {
-      await databases.get(DATABASE_ID);
-      console.log('Database exists');
-    } catch (error) {
-      if (error.code === 404) {
-        // CORRECTED: Use createDatabase instead of create
-        await databases.createDatabase(DATABASE_ID, 'Patient Management System');
-        console.log('Database created');
-      } else {
-        throw error;
-      }
-    }
+    // Skip checking if database exists – Appwrite doesn't support this on client side
 
-    // 2. Initialize Users Collection
+    // 1. Initialize Users Collection
     await initCollection(
       COLLECTIONS.USERS,
       'Users',
@@ -52,7 +41,7 @@ export const initDatabase = async () => {
       ]
     );
 
-    // 3. Initialize Records Collection
+    // 2. Initialize Records Collection
     await initCollection(
       COLLECTIONS.RECORDS,
       'Medical Records',
@@ -63,12 +52,12 @@ export const initDatabase = async () => {
       ],
       [
         AppwritePermission.read(Role.any()),
-        AppwritePermission.create(Role.team('management')),
-        AppwritePermission.update(Role.team('doctor'))
+        AppwritePermission.create(Role.users()),
+        AppwritePermission.update(Role.users())
       ]
     );
 
-    // 4. Initialize Corrections Collection
+    // 3. Initialize Corrections Collection
     await initCollection(
       COLLECTIONS.CORRECTIONS,
       'Corrections',
@@ -93,38 +82,21 @@ async function initCollection(collectionId, name, attributes = [], permissions =
     console.log(`Collection ${collectionId} already exists`);
   } catch (error) {
     if (error.code === 404) {
-       await databases.createCollection(
-        DATABASE_ID,
-        collectionId,
-        name,
-        permissions
-      );
+      await databases.createCollection(DATABASE_ID, collectionId, name, permissions);
       console.log(`Created collection ${collectionId}`);
 
       for (const attr of attributes) {
         try {
-          if (attr.type === 'string') {
-            await databases.createStringAttribute(
-              DATABASE_ID,
-              collectionId,
-              attr.key,
-              attr.size,
-              attr.required
-            );
-          } else if (attr.type === 'email') {
-            await databases.createEmailAttribute(
-              DATABASE_ID,
-              collectionId,
-              attr.key,
-              attr.required
-            );
-          } else if (attr.type === 'datetime') {
-            await databases.createDatetimeAttribute(
-              DATABASE_ID,
-              collectionId,
-              attr.key,
-              attr.required
-            );
+          switch (attr.type) {
+            case 'string':
+              await databases.createStringAttribute(DATABASE_ID, collectionId, attr.key, attr.size, attr.required);
+              break;
+            case 'email':
+              await databases.createEmailAttribute(DATABASE_ID, collectionId, attr.key, attr.required);
+              break;
+            case 'datetime':
+              await databases.createDatetimeAttribute(DATABASE_ID, collectionId, attr.key, attr.required);
+              break;
           }
         } catch (attrError) {
           console.warn(`Error adding attribute ${attr.key}:`, attrError.message);
@@ -139,23 +111,18 @@ async function initCollection(collectionId, name, attributes = [], permissions =
 export const initAdminUser = async () => {
   try {
     const adminEmail = 'admin@example.com';
-    
+    const adminPassword = 'SecurePassword123!';
+
     try {
       await account.createEmailSession(adminEmail, 'dummy-password');
       console.log('Admin user exists');
       return;
-    } catch (authError) {
-      // Expected error
+    } catch {
+      // proceed to create if session fails
     }
-    
-    const adminPassword = 'SecurePassword123!';
-    const adminUser = await account.create(
-      ID.unique(),
-      adminEmail,
-      adminPassword,
-      'System Admin'
-    );
-    
+
+    const adminUser = await account.create(ID.unique(), adminEmail, adminPassword, 'System Admin');
+
     await databases.createDocument(
       DATABASE_ID,
       COLLECTIONS.USERS,
@@ -172,7 +139,7 @@ export const initAdminUser = async () => {
         AppwritePermission.delete(Role.user(adminUser.$id))
       ]
     );
-    
+
     console.log('Admin user created');
   } catch (error) {
     if (error.code === 409) {
